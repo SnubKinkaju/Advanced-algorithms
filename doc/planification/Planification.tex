@@ -1,0 +1,253 @@
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.3cm]{geometry}
+\usepackage{amsmath}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage[shortlabels]{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\setlist{itemsep=2pt, topsep=4pt}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\renewcommand{\arraystretch}{1.15}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\graphicspath{{images/}{../../images/}}
+\hypersetup{
+  pdftitle={Minimum Set Cover: Group Description and Provisional Planning},
+  pdfauthor={Khayr Eddine Laiche, Anas Ben Abou, Rayan La Monica, Badis Benamraoui, Mohamed Benguezzou}
+}
+
+\newcommand{\universitylogo}{%
+  \includegraphics[width=4cm,height=1.7cm,keepaspectratio]{logo-ujm.png}%
+}
+
+\newcommand{\projectscreenshot}[2]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth,height=0.40\textheight,keepaspectratio]{#1}
+    \caption{#2}
+  \end{figure}%
+}
+
+\begin{document}
+
+\hypersetup{pageanchor=false}
+\begin{titlepage}
+  \thispagestyle{empty}
+  \null
+  \begin{tikzpicture}[remember picture,overlay]
+    \node[anchor=north,inner sep=0pt]
+      at ([yshift=-2cm]current page.north) {\universitylogo};
+
+    \node[inner sep=0pt,font=\Large\scshape]
+      at ([yshift=-7.4cm]current page.north) {Master DSC / MLDM};
+
+    \draw[line width=0.8pt]
+      ([xshift=2cm,yshift=-9.7cm]current page.north west) --
+      ([xshift=-2cm,yshift=-9.7cm]current page.north east);
+
+    \node[inner sep=0pt,font=\fontsize{25}{30}\selectfont\scshape]
+      at ([yshift=-11cm]current page.north) {Minimum Set Cover};
+    \node[inner sep=0pt,font=\fontsize{16}{20}\selectfont\scshape]
+      at ([yshift=-12.1cm]current page.north)
+      {Group Description and Provisional Planning};
+
+    \draw[line width=0.8pt]
+      ([xshift=2cm,yshift=-13.3cm]current page.north west) --
+      ([xshift=-2cm,yshift=-13.3cm]current page.north east);
+
+    \node[anchor=north,inner sep=0pt,font=\normalsize\scshape]
+      at ([yshift=-15.6cm]current page.north) {%
+        \begin{tabular}{@{}c@{}}
+          Khayr Eddine LAICHE \\
+          Anas BEN ABOU \\
+          Rayan LA MONICA \\
+          Badis BENAMRAOUI \\
+          Mohamed BENGUEZZOU
+        \end{tabular}%
+      };
+
+    \node[inner sep=0pt,font=\normalsize]
+      at ([yshift=1cm]current page.south) {05/11/2026};
+  \end{tikzpicture}
+\end{titlepage}
+\hypersetup{pageanchor=true}
+
+\section{Project breakdown}
+
+We organize the project into three phases: an initialization phase followed by two main work phases, algorithm development and experimental analysis. The dates below are provisional and may be adjusted.
+
+\paragraph{M1 --- Initialization and organization.}
+\textit{November 5--8, 2026.}
+Establish the planning, responsibilities and shared code base. This phase provides a common foundation for the team to start development.
+
+\paragraph{M2 --- Algorithm development and validation.}
+\textit{November 9--29, 2026.}
+Each member develops their assigned algorithms, with mutual support, testing and progressive integration. By the end of this phase, the algorithms must work correctly together and be ready for experimental evaluation.
+
+\paragraph{M3 --- Experiments and in-depth analysis.}
+\textit{November 30--December 14, 2026.}
+Run the experiments and interpret the results through a thorough comparison of the algorithms. This phase produces an analysis of their performance, solution quality, strengths and limitations, supported by experimental evidence.
+
+\section{Group members and workload}
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.2}
+\setlength{\extrarowheight}{2pt}
+\begin{tabularx}{\textwidth}{|l|L|L|L|r|}
+\hline
+\textbf{Member} & \textbf{Algorithms} & \textbf{Other tasks} & \textbf{Optional learning} & \textbf{Load} \\
+\hline
+LAICHE Khayr Eddine & Brute force & Shared code base, experimental protocol, statistics & Hardness prediction & 20\% \\
+\hline
+BEN ABOU Anas & Dynamic programming (bottom-up and memoized) & Reference solver (HiGHS), shared code base & Labelled training data & 20\% \\
+\hline
+LA MONICA Rayan & Greedy and variants & Graphical interface & Learned greedy score & 20\% \\
+\hline
+BENAMRAOUI Badis & Branch and bound (two versions) & & Learned branching & 20\% \\
+\hline
+BENGUEZZOU Mohamed & RWLS, simulated annealing & Real-world application & & 20\% \\
+\hline
+\end{tabularx}
+\end{table}
+
+This distribution is provisional. The second branch-and-bound method and RWLS cover the additional-method and heuristic requirements. Further algorithm variants, learning extensions and the graphical interface will be explored if time permits. The final report will include the actual workload distribution, the provisional and actual planning, and the required completion checklist.
+
+\clearpage
+\section{Organization and working methodology}
+
+We have chosen \href{https://github.com/SnubKinkaju/Advanced-algorithms}{GitHub} to organize our work and manage the project schedule. Our \href{https://github.com/users/SnubKinkaju/projects/6}{project board} provides a Kanban view for task progress and a roadmap for milestone dates. Issues describe tasks and responsibilities; labels categorize the work and identify optional extensions. We will update issue statuses and record actual effort in the \emph{Time spent (h)} field, keeping a history of changes for the final planning review.
+
+\projectscreenshot{kanban.png}{GitHub project: Kanban view.}
+\projectscreenshot{Roadmap.png}{GitHub project: roadmap view.}
+
+\clearpage
+\section{Meetings with the supervisor}
+
+The six supervision meetings will review progress within the three project milestones. The table below outlines what we aim to have completed by each meeting; dates and targets will be agreed with the supervisor.
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.2}
+\setlength{\extrarowheight}{2pt}
+\begin{tabularx}{\textwidth}{|c|c|L|}
+\hline
+\textbf{Meeting} & \textbf{Milestone} & \textbf{Expected progress} \\
+\hline
+1 & M1 & Project organization and responsibilities agreed; shared code base established. \\
+\hline
+2 & M2 & First algorithm implementations available, with initial tests on small instances. \\
+\hline
+3 & M2 & All required methods implemented and integrated; cross-checks underway and remaining issues identified. \\
+\hline
+4 & M2 & Algorithms validated and ready for comparison; benchmark selection and experimental protocol prepared. \\
+\hline
+5 & M3 & Main experiments completed; first comparison tables, figures and interpretations available. \\
+\hline
+6 & M3 & In-depth comparison and conclusions completed; report draft and presentation outline ready for feedback. \\
+\hline
+\end{tabularx}
+\end{table}
+
+Optional extensions will also be reviewed according to progress and available time. The final archive is due on December 15 before 22:00; the defense takes place on December 17, with slides uploaded just before the assigned slot.
+
+\section{Testing and validation}
+
+\begin{itemize}
+  \item Every returned cover will be checked automatically: all elements must be covered, and the reported cardinality must match the selected subsets.
+  \item On small feasible instances, exact methods that complete their search must agree. HiGHS will provide a reference optimum only when its solver status confirms optimality.
+  \item A valid cover cannot be smaller than a proven optimum or $\lceil z_{LP} \rceil$, where $z_{LP}$ is the optimum of the linear relaxation. A branch-and-bound lower bound must not exceed the optimum of the corresponding subproblem; it may exceed the global optimum for a branch that can be pruned.
+  \item Interrupted runs will be recorded separately; a feasible solution found before a timeout will not be presented as optimal without a proof.
+  \item Unit tests for each method, fixed random seeds, and every result stored with its parameters so that each experiment can be rerun.
+\end{itemize}
+
+\section{Scientific context}
+
+\paragraph{Problem.} Given a universe $U$ of $n$ elements and $m$ subsets $S_1, \dots, S_m$ of $U$, find the smallest number of subsets whose union is $U$. All subsets have the same cost. The decision version is NP-complete \cite{karp1972}. Note that the OR-Library files use the opposite notation ($m$ rows for the elements, $n$ columns for the subsets).
+
+\paragraph{Question.} For a given instance, which method gives the best solution within a fixed time budget, and up to which size can optimality be proved?
+
+\begin{itemize}
+  \item \textbf{H1, limits of exact methods.} Brute force trying solution sizes in increasing order examines at most $\sum_{k=0}^{OPT} \binom{m}{k}$ candidate collections on a feasible instance. Dynamic programming over covered elements has up to $2^n$ states and $O(m \cdot 2^n)$ transitions. We expect dynamic programming to be more competitive on generated instances with few elements and many subsets. STS27 ($m = 27$, $n = 117$) illustrates the different scaling limits; practical runtime and memory limits will be measured.
+  \item \textbf{H2, heuristics across families.} We hypothesize that greedy has larger gaps to reference solutions on CLR than on CYC, and that local search reduces these gaps within the time budget. This will be tested experimentally.
+  \item \textbf{H3, learning.} We hypothesize that learned components improve the classical methods on instances drawn from the training distribution, with smaller gains on unseen instance types and benchmark families.
+\end{itemize}
+
+\paragraph{Methods.} Exact: brute force; dynamic programming (bottom-up and memoized); branch and bound v1, with a feasible greedy solution as upper bound and a counting lower bound (if $U'$ is the set of uncovered elements, at least $\lceil |U'| / \max_j |S_j \cap U'| \rceil$ more subsets are needed, considering only eligible subsets and handling zero gain separately); branch and bound v2, with instance reductions and a Lagrangian lower bound \cite{beasley1987}. Approximate: greedy \cite{chvatal1979} and variants, simulated annealing \cite{kirkpatrick1983}, and RWLS \cite{gao2015}. The integer program solved with HiGHS\footnote{\url{https://highs.dev/}} will be used only as a reference, not counted as one of our methods; its LP solver is described in \cite{huangfu2018}.
+
+\section{Instances, evaluation and extensions}
+\label{sec:instances}
+
+Generated instances will be controlled by $n$, $m$, the density and a random seed, with every element covered by at least one subset. We will record the realized density and any changes made to ensure coverage. We plan to use unweighted instances from the following families in the USCP\_instances repository\footnote{\url{https://github.com/pinam45/USCP_instances}}, selecting sizes compatible with the available time and memory:
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.2}
+\setlength{\extrarowheight}{2pt}
+\begin{tabularx}{\textwidth}{|l|r|l|l|L|}
+\hline
+\textbf{Family (origin)} & \textbf{Count} & \textbf{Elements} & \textbf{Subsets} & \textbf{Status of the reference value} \\
+\hline
+E & 5 & 50 & 500 & Reference value and optimality status to be established \\
+\hline
+STS \cite{fulkerson1974} & 11 & 12 to 796\,797 & 9 to 2\,187 & Reference values and proofs to be checked in \cite{ostrowski2011,pinard2020} and their references \\
+\hline
+CLR \cite{grossman1997} & 4 & 511 to 4\,095 & 210 to 715 & Reference values and proof status to be checked in the literature \\
+\hline
+CYC \cite{grossman1997} & 6 & 240 to 28\,160 & 192 to 11\,264 & Reference values and proof status to be checked in \cite{gao2015,pinard2020} \\
+\hline
+\end{tabularx}
+\end{table}
+
+Reference values will be checked against \cite{kritter2019,pinard2020} and any available optimality proofs. Initial HiGHS runs with a 60\,s limit per instance are planned to establish reference solutions where possible.
+
+\paragraph{Evaluation.} Our implementations will use Python, the same machine and a common time budget; randomized methods will use 10 seeds. We will report runtime, memory use, explored nodes where applicable, and gaps to reference values and valid linear-relaxation bounds. Gaps to best-known values will be distinguished from gaps to proven optima. Repeated measurements will include variability; timeouts and memory limits will be reported explicitly.
+
+\paragraph{Optional learning extensions.} If time permits, we will explore three components, each compared with the classical method without learning: prediction of the branch-and-bound running time from instance features \cite{leytonbrown2009}, compared also with a constant predictor; a greedy score learned from solutions whose optimality HiGHS has proved; and a cheap model imitating an expensive branching rule \cite{khalil2016}. Training and evaluation instances will be kept separate.
+
+\paragraph{Real-world application and optional interface.} We will model surveillance-camera placement as Set Cover \cite{kritter2019}, using a small simulated case with predefined coverage: points to monitor are the elements, and each candidate camera position covers a known set of points. Cameras have equal cost. We will solve the case with our algorithms and interpret the results. A graphical interface may be added if time permits.
+
+\begin{thebibliography}{99}
+\small
+\setlength{\itemsep}{1pt}
+
+\bibitem{beasley1987} J.~E. Beasley. An algorithm for set covering problem. \emph{European Journal of Operational Research}, 31(1):85-93, 1987.
+
+\bibitem{chvatal1979} V.~Chvátal. A greedy heuristic for the set-covering problem. \emph{Mathematics of Operations Research}, 4(3):233-235, 1979.
+
+\bibitem{fulkerson1974} D.~R. Fulkerson, G.~L. Nemhauser, L.~E. Trotter. Two computationally difficult set covering problems that arise in computing the 1-width of incidence matrices of Steiner triple systems. \emph{Mathematical Programming Study}, 2:72-81, 1974.
+
+\bibitem{gao2015} C.~Gao, X.~Yao, T.~Weise, J.~Li. An efficient local search heuristic with row weighting for the unicost set covering problem. \emph{European Journal of Operational Research}, 246(3):750-761, 2015.
+
+\bibitem{grossman1997} T.~Grossman, A.~Wool. Computational experience with approximation algorithms for the set covering problem. \emph{European Journal of Operational Research}, 101(1):81-92, 1997.
+
+\bibitem{huangfu2018} Q.~Huangfu, J.~A.~J. Hall. Parallelizing the dual revised simplex method. \emph{Mathematical Programming Computation}, 10(1):119-142, 2018.
+
+\bibitem{karp1972} R.~M. Karp. Reducibility among combinatorial problems. In \emph{Complexity of Computer Computations}, pages 85-103. Springer, 1972.
+
+\bibitem{khalil2016} E.~B. Khalil, P.~Le~Bodic, L.~Song, G.~Nemhauser, B.~Dilkina. Learning to branch in mixed integer programming. In \emph{Proceedings of AAAI}, pages 724-731, 2016.
+
+\bibitem{kirkpatrick1983} S.~Kirkpatrick, C.~D. Gelatt, M.~P. Vecchi. Optimization by simulated annealing. \emph{Science}, 220(4598):671-680, 1983.
+
+\bibitem{kritter2019} J.~Kritter, M.~Brévilliers, J.~Lepagnot, L.~Idoumghar. On the optimal placement of cameras for surveillance and the underlying set cover problem. \emph{Applied Soft Computing}, 74:133-153, 2019.
+
+\bibitem{leytonbrown2009} K.~Leyton-Brown, E.~Nudelman, Y.~Shoham. Empirical hardness models: methodology and a case study on combinatorial auctions. \emph{Journal of the ACM}, 56(4), 2009.
+
+\bibitem{ostrowski2011} J.~Ostrowski, J.~Linderoth, F.~Rossi, S.~Smriglio. Solving large Steiner triple covering problems. \emph{Operations Research Letters}, 39(2):127-131, 2011.
+
+\bibitem{pinard2020} M.~Pinard, L.~Moalic, M.~Brévilliers, J.~Lepagnot, L.~Idoumghar. A memetic approach for the unicost set covering problem. In \emph{Learning and Intelligent Optimization (LION 14)}, LNCS, pages 233-248. Springer, 2020. doi:10.1007/978-3-030-53552-0\_23.
+
+\end{thebibliography}
+
+\end{document}
