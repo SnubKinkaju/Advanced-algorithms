@@ -1,6 +1,7 @@
-from setcover.methods import highs_ref, trivial
+from setcover.methods import highs_ref, trivial, dp_bottom_up
 
 METHODS = {
     "highs": highs_ref.solve,
     "trivial": trivial.solve,
+    "dp_bottom_up": dp_bottom_up.solve,
 }
