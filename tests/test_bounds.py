@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 import numpy as np
@@ -37,3 +38,15 @@ def test_bounds_never_exceed_the_optimum():
         assert best.status == "optimal"
         assert lp_bound(inst) <= best.size
         assert counting_bound(inst) <= best.size
+
+
+def test_lp_bound_with_enough_time_is_unchanged():
+    inst = read_instance(BENCHMARKS / "e" / "scpe1.txt")
+    assert lp_bound(inst, time_limit=10.0) == lp_bound(inst) == 4
+
+
+def test_lp_bound_respects_time_limit():
+    inst = read_instance(BENCHMARKS / "cyc" / "scpcyc11.txt")
+    start = time.perf_counter()
+    assert lp_bound(inst, time_limit=1.0) is None
+    assert time.perf_counter() - start < 3.0

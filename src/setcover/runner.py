@@ -36,6 +36,7 @@ def run_one(method: str, instance_path: str | Path, seed: int, time_limit: float
         "timed_out": res.timed_out,
         "lower_bound": res.lower_bound,
         "nodes": res.nodes,
+        "extra": res.extra,
         "time": elapsed,
         "valid": valid,
         "error": error,

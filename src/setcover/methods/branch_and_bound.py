@@ -1,3 +1,21 @@
+"""Branch and bound for the unweighted minimum set cover (version 1).
+
+The search starts from the greedy cover, which gives a first upper bound.
+Each node of the tree is a partial solution. To branch, we pick the uncovered
+element with the fewest allowed subsets: any cover must contain one of them,
+so child i takes the i-th subset and forbids the previous ones. This way every
+cover is found in exactly one branch.
+
+A node is cut when it cannot lead to a smaller cover than the best one found:
+- at least one more subset is needed while elements remain uncovered;
+- u uncovered elements and at most g of them per allowed subset need at least
+  ceil(u / g) more subsets (counting bound);
+- an element that no allowed subset covers makes the branch infeasible.
+
+The LP bound is used once, at the root. If the whole tree is explored, the best
+cover is optimal. If the time limit is reached, the best cover found is returned.
+"""
+
 import math
 import time
 
@@ -5,30 +23,20 @@ import numpy as np
 
 from setcover.bounds import lp_bound
 from setcover.instance import Instance
+from setcover.methods import greedy
 from setcover.result import Result
 
 
 def _bits(x: int):
-    """Indices des bits à 1 de x, donc les éléments d'un masque."""
+    """Yield the positions of the bits set to 1 in x, i.e. the elements of a mask."""
     while x:
         low = x & -x
         yield low.bit_length() - 1
         x ^= low
 
 
-def _greedy(masks: tuple[int, ...], full: int) -> list[int]:
-    """Solution initiale : prend toujours l'ensemble qui couvre le plus d'éléments restants."""
-    uncovered = full
-    chosen = []
-    while uncovered:
-        j = max(range(len(masks)), key=lambda k: (masks[k] & uncovered).bit_count())
-        chosen.append(j)
-        uncovered &= ~masks[j]
-    return chosen
-
-
 def _unwind(chosen) -> list[int]:
-    """Reconstruit la liste des ensembles choisis à partir de la liste chaînée."""
+    """Turn the linked list of chosen subsets into a Python list."""
     out = []
     while chosen is not None:
         j, chosen = chosen
@@ -40,24 +48,38 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
           use_lp: bool = True) -> Result:
     deadline = time.perf_counter() + time_limit
 
-    # Un élément qui n'apparaît dans aucun ensemble rend le problème impossible.
+    # An element covered by no subset makes the instance infeasible.
     if any(not c for c in inst.covering):
         return Result(selected=[], size=0, status="none")
     if inst.n == 0:
         return Result(selected=[], size=0, status="optimal", lower_bound=0, nodes=0)
 
-    masks = inst.masks
-    full = (1 << inst.n) - 1
+    # Initial upper bound: the shared greedy algorithm, within the remaining time.
+    start = greedy.solve(inst, deadline - time.perf_counter(), rng)
+    if start.status == "none":
+        return Result(selected=[], size=0, status="none", timed_out=True, nodes=0)
+    best = start.selected
 
-    # Borne supérieure initiale (glouton) et borne inférieure à la racine (LP).
-    best = _greedy(masks, full)
-    root_lb = lp_bound(inst) if use_lp else 1
+    # Root lower bound: the LP bound if it is computed in time, otherwise 1.
+    root_lb = 1
+    if use_lp:
+        lp = lp_bound(inst, time_limit=deadline - time.perf_counter())
+        if lp is not None:
+            root_lb = lp
     if len(best) <= root_lb:
         return Result(selected=sorted(best), size=len(best), status="optimal",
                       lower_bound=len(best), nodes=0)
 
-    # Parcours en profondeur avec une pile explicite.
-    # Un nœud = (éléments non couverts, ensembles choisis, profondeur, ensembles interdits).
+    # No time left to explore: return the greedy cover without building the masks.
+    if time.perf_counter() >= deadline:
+        return Result(selected=sorted(best), size=len(best), status="feasible",
+                      timed_out=True, lower_bound=root_lb, nodes=0)
+
+    masks = inst.masks
+    full = (1 << inst.n) - 1
+
+    # Depth-first search with an explicit stack.
+    # A node is (uncovered elements, chosen subsets, depth, forbidden subsets).
     stack = [(full, None, 0, 0)]
     nodes = 0
     timed_out = False
@@ -70,21 +92,22 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
         uncovered, chosen, depth, forbidden = stack.pop()
         nodes += 1
 
-        # Feuille : tout est couvert.
+        # Leaf: every element is covered.
         if uncovered == 0:
             if depth < len(best):
                 best = _unwind(chosen)
             continue
 
-        # Il faut au moins un ensemble de plus : inutile si on ne peut plus faire mieux.
+        # At least one more subset is needed: stop if that cannot beat the best cover.
         if depth + 1 >= len(best):
             continue
 
-        # Choix de l'élément à couvrir : celui qui a le moins d'ensembles autorisés.
+        # Branch on the uncovered element with the fewest allowed subsets.
         branch = None
         for e in _bits(uncovered):
             cands = [j for j in inst.covering[e] if not (forbidden >> j) & 1]
-            if not cands:          # élément impossible à couvrir dans cette branche
+            if not cands:
+                # No allowed subset covers e: this branch has no solution.
                 branch = []
                 break
             if branch is None or len(cands) < len(branch):
@@ -94,17 +117,17 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
         if not branch:
             continue
 
-        # Borne inférieure : il reste u éléments, un ensemble en couvre au plus k.
+        # Counting bound: u uncovered elements, at most max_gain per allowed subset.
         max_gain = max((masks[j] & uncovered).bit_count()
                        for j in range(inst.m) if not (forbidden >> j) & 1)
         if depth + math.ceil(uncovered.bit_count() / max_gain) >= len(best):
             continue
 
-        # Les ensembles les plus prometteurs d'abord, comme dans le cours.
+        # Try first the subsets that cover the most uncovered elements.
         branch.sort(key=lambda j: (masks[j] & uncovered).bit_count(), reverse=True)
 
-        # Branche i : on prend branch[i] et on interdit branch[0..i-1],
-        # déjà explorés, pour ne jamais visiter deux fois la même solution.
+        # Child i takes branch[i] and forbids branch[0..i-1], which were already
+        # explored, so that the same cover is never visited twice.
         children = []
         f = forbidden
         for j in branch:
