@@ -28,11 +28,17 @@ from setcover.result import Result
 
 
 def _bits(x: int):
-    """Yield the positions of the bits set to 1 in x, i.e. the elements of a mask."""
-    while x:
-        low = x & -x
-        yield low.bit_length() - 1
-        x ^= low
+    """Yield the positions of the bits set to 1 in x, i.e. the elements of a mask.
+
+    The bits are read from the binary string of x, which costs O(n) in total.
+    Clearing the lowest bit at each step would rebuild x every time,
+    which costs O(n) per bit.
+    """
+    bits = bin(x)[:1:-1]
+    i = bits.find("1")
+    while i != -1:
+        yield i
+        i = bits.find("1", i + 1)
 
 
 def _unwind(chosen) -> list[int]:

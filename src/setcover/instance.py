@@ -12,7 +12,17 @@ class Instance:
 
     @cached_property
     def masks(self) -> tuple[int, ...]:
-        return tuple(sum(1 << e for e in s) for s in self.sets)
+        # Each set is written into a byte buffer, then converted to an int once.
+        # Summing 1 << e would rebuild a large int at every addition,
+        # which costs O(n) per element and is very slow when n is large.
+        nbytes = (self.n + 7) // 8
+        out = []
+        for s in self.sets:
+            buf = bytearray(nbytes)
+            for e in s:
+                buf[e >> 3] |= 1 << (e & 7)
+            out.append(int.from_bytes(buf, "little"))
+        return tuple(out)
 
     @property
     def density(self) -> float:

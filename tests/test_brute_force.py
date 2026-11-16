@@ -1,3 +1,4 @@
+import time
 from math import comb
 from pathlib import Path
 
@@ -71,6 +72,15 @@ def test_time_limit_gives_a_valid_lower_bound():
     assert result.status == "none"
     assert result.timed_out
     assert 1 <= result.lower_bound <= 5
+
+
+def test_time_limit_respected_on_large_instance():
+    inst = read_instance(BENCHMARKS / "sts" / "data.1215")
+    begin = time.perf_counter()
+    result = run_bf(inst, time_limit=1.0)
+    elapsed = time.perf_counter() - begin
+    assert result.timed_out
+    assert elapsed < 2.0
 
 
 def test_registry():

@@ -117,5 +117,15 @@ def test_time_limit_respected_on_large_instance():
     assert elapsed < 3.0
 
 
+def test_time_limit_respected_without_lp_on_large_instance():
+    inst = read_instance(BENCHMARKS / "sts" / "data.1215")
+    begin = time.perf_counter()
+    res = run(inst, time_limit=1.0, use_lp=False)
+    elapsed = time.perf_counter() - begin
+    verify(inst, res)
+    assert res.timed_out
+    assert elapsed < 2.0
+
+
 def test_registry():
     assert METHODS["branch_and_bound"] is branch_and_bound.solve
