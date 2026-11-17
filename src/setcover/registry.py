@@ -6,6 +6,7 @@ from setcover.methods import (
     greedy,
     highs_ref,
     rwls,
+    simulated_annealing,
     trivial,
 )
 
@@ -17,5 +18,6 @@ METHODS = {
     "greedy": greedy.solve,
     "highs": highs_ref.solve,
     "rwls": rwls.solve,
+    "simulated_annealing": simulated_annealing.solve,
     "trivial": trivial.solve,
 }
