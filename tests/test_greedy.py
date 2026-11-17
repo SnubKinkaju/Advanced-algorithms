@@ -95,6 +95,47 @@ def test_random_ties_explores_different_covers():
     assert len(sizes) > 1
 
 
+def test_random_ties_can_select_every_tie():
+    # Three subsets of the same size: each of them must be able to come first.
+    inst = make_instance("ties", 6, [[0, 1], [2, 3], [4, 5]])
+    first_choices = {run_greedy(inst, seed=s, random_ties=True).selected[0] for s in range(30)}
+    assert first_choices == {0, 1, 2}
+
+
+def test_random_ties_only_selects_a_largest_gain():
+    # Subset 1 is the only largest one, so it always comes first.
+    inst = make_instance("largest", 5, [[0, 1], [0, 1, 2, 3], [3, 4], [4]])
+    for seed in range(20):
+        result = run_greedy(inst, seed=seed, random_ties=True)
+        assert result.selected[0] == 1
+        assert result.size == 2
+
+
+def reference_random_greedy(inst, rng):
+    # Simple version of the random variant: build the list of all the ties.
+    gain = [len(s) for s in inst.sets]
+    covered = [False] * inst.n
+    selected = []
+    while not all(covered):
+        best_gain = max(gain)
+        ties = [j for j in range(inst.m) if gain[j] == best_gain]
+        best = ties[int(rng.integers(len(ties)))]
+        selected.append(best)
+        for e in inst.sets[best]:
+            if not covered[e]:
+                covered[e] = True
+                for j in inst.covering[e]:
+                    gain[j] -= 1
+    return selected
+
+
+def test_random_ties_matches_the_simple_version():
+    for seed in range(20):
+        inst = generate(10 + seed % 30, 15 + seed % 40, [0.1, 0.2, 0.3][seed % 3], seed)
+        expected = reference_random_greedy(inst, np.random.default_rng(seed))
+        assert run_greedy(inst, seed=seed, random_ties=True).selected == expected
+
+
 def test_default_is_deterministic():
     inst = generate(40, 80, 0.1, seed=3)
     assert run_greedy(inst, seed=1).selected == run_greedy(inst, seed=2).selected
@@ -115,3 +156,19 @@ def test_run_one_keeps_extra():
 
 def test_registry():
     assert METHODS["greedy"] is solve
+
+
+def test_variants_are_registered():
+    cleaned = METHODS["greedy_clean"](TRAP, 30.0, np.random.default_rng(0))
+    assert cleaned.selected == run_greedy(TRAP, remove_redundant=True).selected == [1, 2]
+
+    inst = generate(40, 80, 0.1, seed=3)
+    randomized = METHODS["greedy_random"](inst, 30.0, np.random.default_rng(7))
+    assert randomized.selected == run_greedy(inst, seed=7, random_ties=True).selected
+
+
+def test_run_one_with_a_variant_name():
+    record = run_one("greedy_clean", BENCHMARKS / "cyc" / "scpcyc07.txt", seed=0, time_limit=10.0)
+    assert record["valid"]
+    assert record["size"] == 144
+    assert record["extra"]["removed"] == 4
