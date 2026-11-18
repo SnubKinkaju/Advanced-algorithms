@@ -56,7 +56,7 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
 
     # An element covered by no subset makes the instance infeasible.
     if any(not c for c in inst.covering):
-        return Result(selected=[], size=0, status="none")
+        return Result(selected=[], size=0, status="none", extra={"reason": "infeasible"})
     if inst.n == 0:
         return Result(selected=[], size=0, status="optimal", lower_bound=0, nodes=0)
 
@@ -146,3 +146,5 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
                       timed_out=True, lower_bound=root_lb, nodes=nodes)
     return Result(selected=sorted(best), size=len(best), status="optimal",
                   lower_bound=len(best), nodes=nodes)
+
+
