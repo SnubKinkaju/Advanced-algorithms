@@ -45,6 +45,7 @@ def test_impossible():
     assert result.status == "none"
     assert result.selected == []
     assert result.timed_out is False
+    assert result.extra["reason"] == "infeasible"
 
 
 def test_empty_universe():
@@ -89,4 +90,21 @@ def test_too_many_elements_is_refused():
     result = solve(inst, 10.0, np.random.default_rng(0))
     assert result.status == "none"
     assert result.timed_out is False
-    assert result.extra["reason"] == "memory_limit"
+    assert result.extra["reason"] == "too_large"
+
+
+def test_max_states_is_a_parameter():
+    inst = generate(10, 15, 0.3, seed=0)
+    small = solve(inst, 10.0, np.random.default_rng(0), max_states=8)
+    assert small.status == "none"
+    assert small.extra["reason"] == "too_large"
+    large = solve(inst, 10.0, np.random.default_rng(0), max_states=1 << 10)
+    assert large.status == "optimal"
+
+
+def test_large_instance_refused_at_once():
+    inst = read_instance(BENCHMARKS / "e" / "scpe1.txt")
+    result = solve(inst, 10.0, np.random.default_rng(0))
+    assert result.status == "none"
+    assert result.timed_out is False
+    assert result.extra["reason"] == "too_large"

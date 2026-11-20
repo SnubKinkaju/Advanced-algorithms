@@ -1,69 +1,61 @@
+import time
+from pathlib import Path
 
 import numpy as np
 
+from setcover.generator import generate
 from setcover.instance import make_instance
-from setcover.result import verify
-from setcover.registry import METHODS
+from setcover.io import read_instance
 from setcover.methods.dp_memoized import solve
+from setcover.registry import METHODS
+from setcover.result import verify
+
+BENCHMARKS = Path(__file__).resolve().parents[1] / "data" / "benchmarks"
 
 
-def run_dp(n, sets, time_limit=5.0):
+def run_dp(n, sets, time_limit=5.0, **params):
     inst = make_instance("test", n, sets)
-    rng = np.random.default_rng(42)
-    result = solve(inst, time_limit, rng)
-    return inst, result
+    result = solve(inst, time_limit, np.random.default_rng(42), **params)
+    verify(inst, result)
+    return result
 
 
 def test_simple():
-    inst, result = run_dp(
-        4, [[0, 1], [1, 2], [2, 3]]
-    )
+    result = run_dp(4, [[0, 1], [1, 2], [2, 3]])
     assert result.status == "optimal"
     assert result.size == 2
     assert set(result.selected) == {0, 2}
-    verify(inst, result)
 
 
 def test_one_set():
-    inst, result = run_dp(
-        4, [[0, 1], [1, 2], [0, 1, 2, 3]]
-    )
+    result = run_dp(4, [[0, 1], [1, 2], [0, 1, 2, 3]])
     assert result.status == "optimal"
     assert result.size == 1
     assert result.selected == [2]
-    verify(inst, result)
 
 
 def test_all_sets_needed():
-    inst, result = run_dp(
-        3, [[0], [1], [2]]
-    )
+    result = run_dp(3, [[0], [1], [2]])
     assert result.status == "optimal"
     assert result.size == 3
-    verify(inst, result)
 
 
 def test_impossible():
-    inst, result = run_dp(
-        3, [[0], [1]]
-    )
+    result = run_dp(3, [[0], [1]])
     assert result.status == "none"
     assert result.timed_out is False
+    assert result.extra["reason"] == "infeasible"
 
 
 def test_empty_universe():
-    inst, result = run_dp(0, [])
+    result = run_dp(0, [])
     assert result.status == "optimal"
     assert result.size == 0
     assert result.selected == []
-    verify(inst, result)
 
 
 def test_timeout():
-    inst, result = run_dp(
-        4, [[0, 1], [1, 2], [2, 3]],
-        time_limit=0.0
-    )
+    result = run_dp(4, [[0, 1], [1, 2], [2, 3]], time_limit=0.0)
     assert result.status == "none"
     assert result.timed_out is True
 
@@ -71,3 +63,58 @@ def test_timeout():
 def test_registry():
     assert "dp_memoized" in METHODS
     assert METHODS["dp_memoized"] is solve
+
+
+def test_matches_highs_on_generated_instances():
+    for seed in range(50):
+        inst = generate(4 + seed % 15, 3 + seed % 25, [0.1, 0.2, 0.35][seed % 3], seed)
+        dp = solve(inst, 30.0, np.random.default_rng(seed))
+        ref = METHODS["highs"](inst, 30.0, np.random.default_rng(seed))
+        verify(inst, dp)
+        assert dp.status == "optimal"
+        assert ref.status == "optimal"
+        assert dp.size == ref.size
+
+
+def test_matches_bottom_up():
+    for seed in range(20):
+        inst = generate(6 + seed % 10, 5 + seed % 20, 0.25, seed)
+        top_down = solve(inst, 30.0, np.random.default_rng(0))
+        bottom_up = METHODS["dp_bottom_up"](inst, 30.0, np.random.default_rng(0))
+        assert top_down.size == bottom_up.size
+
+
+def test_sts9_benchmark():
+    inst = read_instance(BENCHMARKS / "sts" / "data.9")
+    result = solve(inst, 30.0, np.random.default_rng(0))
+    verify(inst, result)
+    assert result.status == "optimal"
+    assert result.size == 5
+
+
+def test_memory_limit():
+    # The search needs more than 4 states, so it stops on the memo size.
+    inst = generate(12, 20, 0.2, seed=0)
+    result = solve(inst, 30.0, np.random.default_rng(0), max_states=4)
+    assert result.status == "none"
+    assert result.timed_out is False
+    assert result.extra["reason"] == "memory_limit"
+
+
+def test_too_deep_instance_refused_at_once():
+    inst = generate(30, 10, 0.3, seed=0)
+    begin = time.perf_counter()
+    result = solve(inst, 30.0, np.random.default_rng(0), max_depth=20)
+    assert time.perf_counter() - begin < 0.1
+    assert result.status == "none"
+    assert result.extra["reason"] == "too_large"
+
+
+def test_time_limit_respected():
+    inst = read_instance(BENCHMARKS / "sts" / "data.27")
+    begin = time.perf_counter()
+    result = solve(inst, 1.0, np.random.default_rng(0))
+    elapsed = time.perf_counter() - begin
+    assert result.status == "none"
+    assert result.timed_out is True
+    assert elapsed < 1.2

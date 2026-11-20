@@ -1,3 +1,23 @@
+"""Bottom-up dynamic programming for the unweighted minimum set cover.
+
+A state is a set of covered elements, stored as a bitmask of n bits.
+dp[mask] is the smallest number of subsets whose union is exactly mask.
+Starting from dp[0] = 0, every state is extended by every subset j:
+
+    dp[mask | S_j] = min(dp[mask | S_j], dp[mask] + 1).
+
+Since mask | S_j >= mask, the states are processed in increasing order and
+every state is final when it is reached. The answer is dp[2^n - 1], and the
+cover is rebuilt by following the parent of each state.
+
+Complexity: Theta(m * 2^n) time and Theta(2^n) memory (three lists of 2^n
+entries). The method is only usable for small n: instances with
+2^n > max_states are refused at once with reason "too_large".
+
+The clock is checked once per state, not once per transition: a transition is
+only an OR and a comparison, and reading the clock costs about as much.
+After the deadline, at most m more transitions are done.
+"""
 
 import time
 
@@ -7,96 +27,62 @@ from setcover.instance import Instance
 from setcover.result import Result
 
 
-MAX_STATES = 1 << 20  # Maximum : 2^20 états
-
-
 def solve(
     inst: Instance,
     time_limit: float,
-    rng: np.random.Generator
+    rng: np.random.Generator,
+    max_states: int = 1 << 20,
 ) -> Result:
-
     deadline = time.perf_counter() + time_limit
 
-    # 1. Nombre d'états
+    # An element covered by no subset: no cover exists.
+    if any(not c for c in inst.covering):
+        return Result(selected=[], size=0, status="none", extra={"reason": "infeasible"})
+
     n = inst.n
     total_states = 1 << n
     full_mask = total_states - 1
 
-    # 2. Vérification des ressources
+    # The table needs 2^n entries: refuse the instance before allocating it.
+    if total_states > max_states:
+        return Result(selected=[], size=0, status="none", extra={"reason": "too_large"})
+
     if time.perf_counter() >= deadline:
-        return Result(
-            selected=[],
-            size=0,
-            status="none",
-            timed_out=True
-        )
+        return Result(selected=[], size=0, status="none", timed_out=True)
 
-    if total_states > MAX_STATES:
-        return Result(
-            selected=[],
-            size=0,
-            status="none",
-            timed_out=False,
-            extra={"reason": "memory_limit"}
-        )
-
-    # 3. Initialisation
     dp = [float("inf")] * total_states
     parent = [-1] * total_states
     chosen = [-1] * total_states
-
     dp[0] = 0
+    masks = inst.masks
 
-    # 4. Transitions DP
     for mask in range(total_states):
-
         if time.perf_counter() >= deadline:
-            return Result(
-                selected=[],
-                size=0,
-                status="none",
-                timed_out=True
-            )
+            return Result(selected=[], size=0, status="none", timed_out=True)
 
         if dp[mask] == float("inf"):
+            # This set of elements cannot be reached exactly.
             continue
 
-        for j, subset_mask in enumerate(inst.masks):
-
+        new_cost = dp[mask] + 1
+        for j, subset_mask in enumerate(masks):
             new_mask = mask | subset_mask
-            new_cost = dp[mask] + 1
-
             if new_cost < dp[new_mask]:
                 dp[new_mask] = new_cost
                 parent[new_mask] = mask
                 chosen[new_mask] = j
 
-    # 5. Aucune couverture possible
+    # Safety net: with every element covered by a subset, this cannot happen.
     if dp[full_mask] == float("inf"):
-        return Result(
-            selected=[],
-            size=0,
-            status="none",
-            timed_out=False
-        )
+        return Result(selected=[], size=0, status="none", extra={"reason": "infeasible"})
 
-    # 6. Reconstruction
-    selected_sets = []
+    # Rebuild the cover from the full state back to the empty one.
+    selected = []
     mask = full_mask
-
     while mask != 0:
-        j = chosen[mask]
-        selected_sets.append(j)
+        selected.append(chosen[mask])
         mask = parent[mask]
+    selected.reverse()
 
-    selected_sets.reverse()
-
-    # 7. Résultat optimal
-    return Result(
-        selected=selected_sets,
-        size=len(selected_sets),
-        status="optimal",
-        timed_out=False,
-        lower_bound=len(selected_sets)
-    )
+    return Result(selected=selected, size=len(selected), status="optimal",
+                  lower_bound=len(selected))
