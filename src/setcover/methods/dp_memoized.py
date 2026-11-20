@@ -70,9 +70,6 @@ def solve(
 
         for j, subset_mask in enumerate(inst.masks):
 
-            if time.perf_counter() >= deadline:
-                raise DPTimeout()
-
             new_mask = mask | subset_mask
 
             if new_mask == mask:

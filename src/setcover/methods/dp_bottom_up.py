@@ -64,14 +64,6 @@ def solve(
 
         for j, subset_mask in enumerate(inst.masks):
 
-            if time.perf_counter() >= deadline:
-                return Result(
-                    selected=[],
-                    size=0,
-                    status="none",
-                    timed_out=True
-                )
-
             new_mask = mask | subset_mask
             new_cost = dp[mask] + 1
 
