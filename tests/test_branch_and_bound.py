@@ -41,6 +41,7 @@ def test_uncoverable():
     res = run(inst)
     verify(inst, res)
     assert res.status == "none"
+    assert res.extra["reason"] == "infeasible"
 
 
 def test_zero_time_limit():
