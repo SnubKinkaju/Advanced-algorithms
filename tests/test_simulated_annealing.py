@@ -25,18 +25,8 @@ def run_sa(inst, seed=0, time_limit=10.0, **params):
     return result
 
 
-class FixedRandom:
-    """Control proposed moves and acceptance draws in small examples."""
-
-    def __init__(self, moves=(), draw=0.0):
-        self.moves = iter(moves)
-        self.draw = draw
-
-    def integers(self, high):
-        return next(self.moves)
-
-    def random(self):
-        return self.draw
+def recount(inst, items):
+    return [sum(e in inst.sets[j] for j in items) for e in range(inst.n)]
 
 
 def test_escapes_a_cover_that_cannot_be_improved_by_removals_alone():
@@ -46,70 +36,57 @@ def test_escapes_a_cover_that_cannot_be_improved_by_removals_alone():
         covered = {e for j in initial.selected if j != removed for e in TRAP.sets[j]}
         assert len(covered) < TRAP.n
 
-    result = run_sa(TRAP)
-    assert result.status == "feasible"
+    result = run_sa(TRAP, max_steps=200)
     assert result.selected == [3, 4]
     assert result.extra["initial_size"] == 3
 
 
-@pytest.mark.parametrize("temperature, accepted", [(1.0, True), (0.1, False)])
-def test_worse_move_acceptance_depends_on_temperature(temperature, accepted):
-    inst = make_instance("duplicate", 1, [[0], [0]])
-    selected, counts = {0}, [1]
-    changed = sa._try_move(inst, selected, counts, 1, temperature, FixedRandom(draw=0.2))
-    assert changed is accepted
-    assert selected == ({0, 1} if accepted else {0})
-    assert counts == ([2] if accepted else [1])
+def test_one_move_removes_repairs_and_cleans():
+    # Removing 0 uncovers 1 and 3; the repair adds 3 and 4, which make 1 and 2 redundant.
+    cover = sa._Cover(TRAP, [0, 1, 2])
+    log = sa._move(TRAP, cover, [False, True, True, False, False], np.random.default_rng(0))
+    assert sorted(cover.items) == [3, 4]
+    assert sum(sign for sign, _ in log) == -1
+    assert cover.counts == recount(TRAP, cover.items)
 
 
-def test_removal_preserves_coverage_and_improving_moves_are_always_accepted():
-    inst = make_instance("small", 2, [[0, 1], [1]])
-    selected, counts = {0, 1}, [1, 2]
-    assert not sa._try_move(inst, selected, counts, 0, 0.01, FixedRandom(draw=1.0))
-    assert selected == {0, 1} and counts == [1, 2]
-    assert sa._try_move(inst, selected, counts, 1, 0.01, FixedRandom(draw=1.0))
-    assert selected == {0} and counts == [1, 1]
-
-
-def test_counts_match_independent_recomputation_after_random_moves():
-    inst = generate(20, 30, 0.2, seed=4)
-    selected = set(range(inst.m))
-    counts = sa._coverage_counts(inst, selected, time.perf_counter() + 10)
+def test_moves_keep_a_cover_and_undo_restores_the_state():
+    inst = generate(25, 40, 0.15, seed=4)
+    cover = sa._Cover(inst, greedy.solve(inst, 10.0, np.random.default_rng(0)).selected)
     rng = np.random.default_rng(3)
-    for _ in range(300):
-        sa._try_move(inst, selected, counts, int(rng.integers(inst.m)), 1.0, rng)
-        expected = [sum(e in inst.sets[j] for j in selected) for e in range(inst.n)]
-        assert counts == expected
-        assert all(count > 0 for count in counts)
+    for step in range(300):
+        before_items, before_counts = sorted(cover.items), list(cover.counts)
+        log = sa._move(inst, cover, [False] * inst.m, rng)
+        assert all(c > 0 for c in cover.counts)
+        assert cover.counts == recount(inst, cover.items)
+        assert all(cover.pos[j] == i for i, j in enumerate(cover.items))
+        if step % 2:
+            sa._undo(cover, log)
+            assert sorted(cover.items) == before_items
+            assert cover.counts == before_counts
 
 
-def test_returns_best_cover_even_when_the_last_move_is_worse():
-    inst = make_instance("small", 2, [[0], [1], [0, 1]])
-    result = sa._anneal(
-        inst, [0, 1, 2], time.perf_counter() + 10, FixedRandom(moves=[0, 0]),
-        1.0, 0.95, 0.01, 10, 2,
-    )
-    verify(inst, result)
-    assert result.selected == [1, 2]
-    assert result.extra["accepted_moves"] == 2
+def test_fixed_subsets_are_never_removed():
+    # Subset 0 is the only one covering element 0.
+    inst = make_instance("fixed", 4, [[0, 1], [1, 2], [2, 3], [1, 2, 3]])
+    result = run_sa(inst, max_steps=300)
+    assert 0 in result.selected
 
 
-def test_improvement_is_saved_before_timeout(monkeypatch):
-    clock = [0.0]
-    monkeypatch.setattr(sa.time, "perf_counter", lambda: clock[0])
-    original_move = sa._try_move
+def test_best_time_and_step_are_recorded():
+    inst = generate(40, 80, 0.1, seed=1)
+    begin = time.perf_counter()
+    result = run_sa(inst, time_limit=0.5)
+    elapsed = time.perf_counter() - begin
+    assert 0 <= result.extra["best_time"] <= elapsed
+    assert 0 <= result.extra["best_step"] <= result.extra["steps"]
 
-    def slow_move(*args):
-        changed = original_move(*args)
-        clock[0] = 2.0
-        return changed
 
-    monkeypatch.setattr(sa, "_try_move", slow_move)
-    inst = make_instance("small", 2, [[0], [1], [0, 1]])
-    result = sa._anneal(inst, [0, 1, 2], 1.0, FixedRandom(moves=[0]), 1.0, 0.95, 0.01, 10, None)
-    verify(inst, result)
-    assert result.selected == [1, 2]
-    assert result.timed_out
+def test_frozen_search_is_restarted():
+    # A tiny instance freezes quickly; the search must go on until max_steps.
+    result = run_sa(TRAP, max_steps=2000, steps_per_temperature=4)
+    assert result.extra["steps"] == 2000
+    assert result.extra["restarts"] >= 1
 
 
 def test_initialization_uses_the_same_time_budget(monkeypatch):
@@ -160,12 +137,11 @@ def test_one_subset_cover_and_empty_candidate_subsets():
     assert result.extra["steps"] == 0
 
 
-def test_cooling_schedule_stops_without_claiming_a_timeout():
+def test_only_fixed_subsets_stops_at_once():
     inst = make_instance("mandatory", 2, [[0], [1]])
-    result = run_sa(inst, initial_temperature=1.0, cooling_rate=0.5,
-                    min_temperature=0.2, steps_per_temperature=4)
-    assert result.extra["steps"] == 12
-    assert result.extra["temperature"] == pytest.approx(0.125)
+    result = run_sa(inst)
+    assert result.selected == [0, 1]
+    assert result.extra["steps"] == 0
     assert not result.timed_out
 
 
@@ -174,8 +150,8 @@ def test_fixed_seed_and_step_limit_are_reproducible():
     first = run_sa(inst, seed=7, max_steps=100)
     second = run_sa(inst, seed=7, max_steps=100)
     assert first.selected == second.selected
-    assert first.extra == second.extra
-    assert first.extra["steps"] == 100
+    assert first.extra["steps"] == second.extra["steps"] == 100
+    assert first.extra["accepted_moves"] == second.extra["accepted_moves"]
 
 
 def test_generated_covers_are_valid_and_never_worse_than_initialization():
@@ -185,7 +161,6 @@ def test_generated_covers_are_valid_and_never_worse_than_initialization():
         optimum = brute_force.solve(inst, 10.0, np.random.default_rng(seed))
         result = run_sa(inst, seed=seed, max_steps=500)
         assert optimum.status == "optimal"
-        assert result.status == "feasible"
         assert optimum.size <= result.size <= result.extra["initial_size"]
         assert inst == before
 
@@ -198,20 +173,22 @@ def test_benchmarks_through_the_shared_runner(path):
     assert record["size"] <= record["extra"]["initial_size"]
 
 
-def test_short_time_limit_on_large_instance():
-    record = run_one("simulated_annealing", BENCHMARKS / "cyc/scpcyc11.txt", seed=0, time_limit=0.05)
+@pytest.mark.parametrize("path", ["cyc/scpcyc11.txt", "sts/data.2187"])
+def test_time_limit_on_large_instances(path):
+    record = run_one("simulated_annealing", BENCHMARKS / path, seed=0, time_limit=1.0)
     assert record["valid"]
     assert record["timed_out"]
-    assert record["time"] < 1.0
+    assert record["time"] < 1.3
 
 
 @pytest.mark.parametrize("params", [
     {"time_limit": -1.0}, {"time_limit": math.nan}, {"time_limit": math.inf},
     {"initial_temperature": 0.0}, {"initial_temperature": math.inf},
     {"cooling_rate": 0.0}, {"cooling_rate": 1.0}, {"cooling_rate": math.nan},
-    {"min_temperature": 0.0}, {"min_temperature": 1.0},
-    {"min_temperature": math.nan}, {"steps_per_temperature": 0},
-    {"steps_per_temperature": 1.5}, {"max_steps": -1}, {"max_steps": 1.5},
+    {"min_acceptance": -0.1}, {"min_acceptance": 1.5}, {"min_acceptance": math.nan},
+    {"frozen_levels": 0}, {"frozen_levels": 2.5},
+    {"steps_per_temperature": 0}, {"steps_per_temperature": 1.5},
+    {"max_steps": -1}, {"max_steps": 1.5},
 ])
 def test_invalid_parameters_are_rejected(params):
     with pytest.raises(ValueError):
