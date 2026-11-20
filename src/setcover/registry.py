@@ -1,3 +1,5 @@
+from functools import partial
+
 from setcover.methods import (
     branch_and_bound,
     brute_force,
@@ -15,6 +17,9 @@ METHODS = {
     "dp_bottom_up": dp_bottom_up.solve,
     "dp_memoized": dp_memoized.solve,
     "greedy": greedy.solve,
+    # Greedy variants: the same function with one option switched on.
+    "greedy_clean": partial(greedy.solve, remove_redundant=True),
+    "greedy_random": partial(greedy.solve, random_ties=True),
     "highs": highs_ref.solve,
     "rwls": rwls.solve,
     "trivial": trivial.solve,

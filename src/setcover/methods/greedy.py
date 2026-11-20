@@ -11,6 +11,12 @@ Two optional variants are available through keyword arguments:
   them at random instead of always the one with the smallest index.
 - remove_redundant: at the end, remove the selected subsets that are not
   needed any more because the other selected subsets cover all their elements.
+
+Complexity: O(k * m + N) time and O(n + m) memory, where k is the size of the
+cover and N the sum of the sizes of all the subsets. Each of the k rounds
+scans the m gains to find the largest one. The gain updates cost O(N) in
+total, because each element is covered for the first time only once.
+remove_redundant adds O(N).
 """
 
 import time
@@ -37,12 +43,18 @@ def solve(
     n_uncovered = inst.n
     selected = []
 
+    # Largest gain. Gains only decrease, so this value never goes up: it is
+    # kept from one round to the next and recomputed only when needed.
+    best_gain = max(gain, default=0)
+
     while n_uncovered > 0:
         if time.perf_counter() >= deadline:
             # The cover is not complete yet, so there is nothing valid to return.
             return Result(selected=[], size=0, status="none", timed_out=True)
 
-        best_gain = max(gain, default=0)
+        if best_gain not in gain:
+            # No subset has this gain any more: find the new largest gain.
+            best_gain = max(gain, default=0)
         if best_gain == 0:
             # No subset covers any remaining element: the instance has no cover.
             return Result(selected=[], size=0, status="none", extra={"reason": "infeasible"})
@@ -50,8 +62,13 @@ def solve(
         # Greedy choice: a subset with the largest gain.
         if random_ties:
             # Variant: choose at random among all the subsets with this gain.
-            ties = [j for j in range(inst.m) if gain[j] == best_gain]
-            best = ties[int(rng.integers(len(ties)))]
+            # Draw a rank among the ties, then move to the tie of that rank.
+            # No list of the ties is built: count() and index() scan the
+            # gains much faster than a Python loop.
+            rank = int(rng.integers(gain.count(best_gain)))
+            best = gain.index(best_gain)
+            for _ in range(rank):
+                best = gain.index(best_gain, best + 1)
         else:
             # Default: the smallest index, so the result is always the same.
             best = gain.index(best_gain)
