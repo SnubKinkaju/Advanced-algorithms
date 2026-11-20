@@ -9,6 +9,7 @@ from setcover.methods import (
     greedy,
     highs_ref,
     rwls,
+    simulated_annealing,
     trivial,
 )
 
@@ -24,5 +25,6 @@ METHODS = {
     "greedy_random": partial(greedy.solve, random_ties=True),
     "highs": highs_ref.solve,
     "rwls": rwls.solve,
+    "simulated_annealing": simulated_annealing.solve,
     "trivial": trivial.solve,
 }
