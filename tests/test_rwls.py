@@ -8,7 +8,7 @@ import pytest
 from setcover.generator import generate
 from setcover.instance import make_instance
 from setcover.io import read_instance
-from setcover.methods import rwls
+from setcover.methods import greedy, rwls
 from setcover.methods.rwls import solve
 from setcover.registry import METHODS
 from setcover.result import verify
@@ -105,3 +105,59 @@ def test_incremental_scores_are_exact():
 
 def test_registry():
     assert METHODS["rwls"] is solve
+
+
+def test_initial_cover_is_the_random_tie_greedy():
+    # Same rule as the article: highest score, ties at random.
+    inst = read_instance(BENCHMARKS / "cyc" / "scpcyc07.txt")
+    for seed in range(5):
+        state = rwls._SearchState(inst)
+        assert rwls._initial_cover(inst, state, time.perf_counter() + 60, np.random.default_rng(seed))
+        expected = greedy.solve(inst, 60.0, np.random.default_rng(seed), random_ties=True)
+        assert sorted(state.selected) == sorted(expected.selected)
+        assert not state.uncovered
+
+
+def test_cover_found_quickly_on_the_largest_cyc():
+    record = run_one("rwls", BENCHMARKS / "cyc" / "scpcyc11.txt", seed=0, time_limit=2.0)
+    assert record["valid"]
+    assert record["size"] > 0
+
+
+def test_best_time_and_step_are_recorded():
+    inst = read_instance(BENCHMARKS / "sts" / "data.27")
+    begin = time.perf_counter()
+    result = solve(inst, 1.0, np.random.default_rng(0))
+    elapsed = time.perf_counter() - begin
+    verify(inst, result)
+    assert 0 <= result.extra["best_time"] <= elapsed
+    assert 0 <= result.extra["best_step"] <= result.extra["steps"]
+
+
+def test_indexed_set():
+    s = rwls._IndexedSet(10, [3, 1, 4])
+    s.remove(3)
+    s.add(7)
+    s.remove(7)
+    s.add(9)
+    assert sorted(s) == [1, 4, 9]
+    assert len(s) == 3
+    assert 4 in s and 3 not in s and 7 not in s
+    for i, x in enumerate(s.items):
+        assert s.pos[x] == i
+    assert s - {4} == {1, 9}
+
+
+def test_load_cover_matches_successive_additions():
+    inst = read_instance(BENCHMARKS / "sts" / "data.81")
+    cover = greedy.solve(inst, 60.0, np.random.default_rng(3), random_ties=True).selected
+    loaded = rwls._SearchState(inst)
+    rwls._load_cover(inst, loaded, cover)
+    added = rwls._SearchState(inst)
+    for j in cover:
+        rwls._add_subset(inst, added, j)
+    assert sorted(loaded.selected) == sorted(added.selected)
+    assert loaded.cover_count == added.cover_count
+    assert loaded.scores == added.scores
+    assert loaded.can_add == added.can_add
+    assert sorted(loaded.uncovered) == sorted(added.uncovered)

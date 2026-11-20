@@ -1,3 +1,15 @@
+"""RWLS (Gao, Yao, Weise, Li, EJOR 2015) for the unweighted minimum set cover.
+
+Elements have weights (start at 1). Score of a subset outside the solution:
+weight of the uncovered elements it covers; inside: minus the weight of the
+elements only it covers. Start from the random-tie greedy. When the solution
+is a cover, record it and remove one subset. Otherwise remove the best
+non-tabu subset, add the best allowed subset covering a random uncovered
+element, then add 1 to the weight of every uncovered element.
+
+Complexity: O(t * p) per add or remove (t = max subsets per element,
+p = max subset size), plus O(|C|) to choose the removal. Memory O(n + m).
+"""
 
 import math
 import time
@@ -7,22 +19,60 @@ from collections.abc import Iterable
 import numpy as np
 
 from setcover.instance import Instance
+from setcover.methods import greedy
 from setcover.result import Result
 
 
+class _IndexedSet:
+    """Integers in [0, size): O(1) add, remove, membership and random draw."""
+
+    def __init__(self, size: int, items: Iterable[int] = ()):
+        self.items: list[int] = []
+        self.pos = [-1] * size
+        for x in items:
+            self.add(x)
+
+    def add(self, x: int) -> None:
+        self.pos[x] = len(self.items)
+        self.items.append(x)
+
+    def remove(self, x: int) -> None:
+        i = self.pos[x]
+        last = self.items.pop()
+        if last != x:
+            self.items[i] = last
+            self.pos[last] = i
+        self.pos[x] = -1
+
+    def __contains__(self, x: int) -> bool:
+        return self.pos[x] >= 0
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def __sub__(self, other) -> set[int]:
+        return {x for x in self.items if x not in other}
+
+
 class _SearchState:
-    """Mutable search data, kept separate from the shared instance."""
+    """Search data, separate from the shared instance."""
 
     def __init__(self, inst: Instance):
-        self.selected: set[int] = set()
+        self.selected = _IndexedSet(inst.m)
         self.cover_count = [0] * inst.n
-        self.uncovered = set(range(inst.n))
+        self.uncovered = _IndexedSet(inst.n, range(inst.n))
         self.weights = [1] * inst.n
         self.scores = [len(subset) for subset in inst.sets]
         self.can_add = [True] * inst.m
         self.timestamps = [0] * inst.m
-        # These subsets are the only way to cover at least one element.
+        # Only subset covering some element: never removed.
         self.fixed = {columns[0] for columns in inst.covering if len(columns) == 1}
+        self.is_fixed = [False] * inst.m
+        for j in self.fixed:
+            self.is_fixed[j] = True
 
 
 def _choose_subset(
@@ -31,7 +81,7 @@ def _choose_subset(
     rng: np.random.Generator,
     use_age: bool = True,
 ) -> int:
-    """Prefer the highest score, then the oldest move, then a random tie."""
+    """Highest score, then oldest move, then random."""
     best_key = None
     ties = []
     for j in candidates:
@@ -46,7 +96,6 @@ def _choose_subset(
 
 
 def _add_subset(inst: Instance, state: _SearchState, j: int) -> None:
-    """Add a subset and update coverage, scores and neighboring tabu flags."""
     state.selected.add(j)
     state.scores[j] = -state.scores[j]
     for e in inst.sets[j]:
@@ -59,15 +108,12 @@ def _add_subset(inst: Instance, state: _SearchState, j: int) -> None:
                 continue
             state.can_add[other] = True
             if count == 1:
-                # This element no longer contributes to an addition gain.
                 state.scores[other] -= state.weights[e]
             elif count == 2 and other in state.selected:
-                # The previous sole covering subset can now be removed safely.
                 state.scores[other] += state.weights[e]
 
 
 def _remove_subset(inst: Instance, state: _SearchState, j: int) -> None:
-    """Remove a subset and update the same data as the addition operator."""
     state.selected.remove(j)
     state.scores[j] = -state.scores[j]
     for e in inst.sets[j]:
@@ -83,16 +129,19 @@ def _remove_subset(inst: Instance, state: _SearchState, j: int) -> None:
                 state.scores[other] += state.weights[e]
             elif count == 1 and other in state.selected:
                 state.scores[other] -= state.weights[e]
-    # A removed subset becomes eligible again after a neighbor changes.
     state.can_add[j] = False
 
 
 def _increase_weights(inst: Instance, state: _SearchState) -> None:
-    """Give uncovered elements more influence on the next choices."""
     for e in state.uncovered:
         state.weights[e] += 1
         for j in inst.covering[e]:
             state.scores[j] += 1
+
+
+def _removable(state: _SearchState) -> list[int]:
+    is_fixed = state.is_fixed
+    return [j for j in state.selected if not is_fixed[j]]
 
 
 def _initial_cover(
@@ -101,16 +150,28 @@ def _initial_cover(
     deadline: float,
     rng: np.random.Generator,
 ) -> bool:
-    """Build a greedy cover; return False if the deadline interrupts it."""
-    while state.uncovered:
-        if time.perf_counter() >= deadline:
-            return False
-        candidates = (j for j in range(inst.m) if j not in state.selected)
-        j = _choose_subset(candidates, state, rng, use_age=False)
-        if time.perf_counter() >= deadline:
-            return False
-        _add_subset(inst, state, j)
+    """Random-tie greedy, the initialization of the article. False on timeout."""
+    start = greedy.solve(inst, max(0.0, deadline - time.perf_counter()), rng,
+                         random_ties=True)
+    if start.status == "none":
+        return False
+    _load_cover(inst, state, start.selected)
     return True
+
+
+def _load_cover(inst: Instance, state: _SearchState, cover: list[int]) -> None:
+    """Same state as calling _add_subset on each subset, but in O(sum |S_j|)."""
+    for j in cover:
+        state.selected.add(j)
+        for e in inst.sets[j]:
+            state.cover_count[e] += 1
+    state.uncovered = _IndexedSet(inst.n, (e for e in range(inst.n) if state.cover_count[e] == 0))
+    count, weights = state.cover_count, state.weights
+    for j, subset in enumerate(inst.sets):
+        if j in state.selected:
+            state.scores[j] = -sum(weights[e] for e in subset if count[e] == 1)
+        else:
+            state.scores[j] = sum(weights[e] for e in subset if count[e] == 0)
 
 
 def _exchange_subset(
@@ -120,12 +181,11 @@ def _exchange_subset(
     step: int,
     rng: np.random.Generator,
 ) -> bool:
-    """Exchange one subset while keeping the candidate size unchanged."""
-    removable = sorted(state.selected - state.fixed)
+    removable = _removable(state)
     if not removable:
         return False
 
-    # Normally, the two most recently added subsets cannot be removed.
+    # The two subsets added last are tabu.
     candidates = [j for j in removable if j not in tabu]
     while not candidates:
         tabu.popleft()
@@ -133,8 +193,7 @@ def _exchange_subset(
     removed = _choose_subset(candidates, state, rng)
     _remove_subset(inst, state, removed)
 
-    # Repair a randomly chosen uncovered element using an eligible subset.
-    uncovered = sorted(state.uncovered)
+    uncovered = state.uncovered.items
     e = uncovered[int(rng.integers(len(uncovered)))]
     candidates = [j for j in inst.covering[e] if state.can_add[j]]
     added = _choose_subset(candidates, state, rng)
@@ -150,41 +209,47 @@ def _exchange_subset(
 def _local_search(
     inst: Instance,
     state: _SearchState,
+    begin: float,
     deadline: float,
     rng: np.random.Generator,
     max_steps: int | None,
 ) -> Result:
-    """Search for smaller covers and always preserve the best valid one."""
     best_selected = sorted(state.selected)
+    best_time = time.perf_counter() - begin
+    best_step = 0
     tabu: deque[int] = deque(maxlen=2)
     steps = 0
 
     while time.perf_counter() < deadline:
-        # Shrink a valid cover until some elements become uncovered.
         if not state.uncovered:
-            best_selected = sorted(state.selected)
-            removable = sorted(state.selected - state.fixed)
+            if len(state.selected) < len(best_selected):
+                best_selected = sorted(state.selected)
+                best_time = time.perf_counter() - begin
+                best_step = steps
+            removable = _removable(state)
             if not removable or len(best_selected) == 1:
                 break
             j = _choose_subset(removable, state, rng, use_age=False)
             _remove_subset(inst, state, j)
             continue
 
-        # An optional step limit makes debugging runs reproducible.
         if max_steps is not None and steps >= max_steps:
             break
         if not _exchange_subset(inst, state, tabu, steps + 1, rng):
             break
         steps += 1
-        if not state.uncovered:
-            best_selected = sorted(state.selected)
+
+    if not state.uncovered and len(state.selected) < len(best_selected):
+        best_selected = sorted(state.selected)
+        best_time = time.perf_counter() - begin
+        best_step = steps
 
     return Result(
         selected=best_selected,
         size=len(best_selected),
         status="feasible",
         timed_out=time.perf_counter() >= deadline,
-        extra={"steps": steps},
+        extra={"steps": steps, "best_step": best_step, "best_time": best_time},
     )
 
 
@@ -194,10 +259,9 @@ def solve(
     rng: np.random.Generator,
     max_steps: int | None = None,
 ) -> Result:
-    """Run RWLS; max_steps optionally limits exchanges for debugging."""
-    deadline = time.perf_counter() + time_limit
+    begin = time.perf_counter()
+    deadline = begin + time_limit
 
-    # 1. Check the budget and handle special cases.
     if not math.isfinite(time_limit) or time_limit < 0:
         raise ValueError("time_limit must be finite and non-negative")
     if max_steps is not None and (not isinstance(max_steps, int) or max_steps < 0):
@@ -209,10 +273,8 @@ def solve(
     if any(not columns for columns in inst.covering):
         return Result(selected=[], size=0, status="none", extra={"reason": "infeasible"})
 
-    # 2. Build the first valid cover without changing the instance.
     state = _SearchState(inst)
     if not _initial_cover(inst, state, deadline, rng):
         return Result(selected=[], size=0, status="none", timed_out=True)
 
-    # 3. Improve it and return the best valid cover found.
-    return _local_search(inst, state, deadline, rng, max_steps)
+    return _local_search(inst, state, begin, deadline, rng, max_steps)
