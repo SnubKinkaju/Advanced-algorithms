@@ -83,5 +83,44 @@ def test_time_limit_respected_on_large_instance():
     assert elapsed < 2.0
 
 
+SINGLETONS = make_instance("singletons", 15, [[e] for e in range(15)])
+
+
+def test_zero_budget_is_respected():
+    # Every size has fewer than 16384 combinations: the old per-size counter
+    # never read the clock and examined all 2^15 combinations.
+    result = run_bf(SINGLETONS, time_limit=0.0)
+    assert result.status == "none"
+    assert result.timed_out
+    assert result.extra["checked"] == 0
+    assert result.lower_bound == 0
+
+
+def test_singletons_with_enough_time():
+    result = run_bf(SINGLETONS, time_limit=30.0)
+    assert result.status == "optimal"
+    assert result.size == 15
+    assert result.extra["checked"] == 2 ** 15
+    assert result.extra["nodes"] >= result.extra["checked"]
+
+
+def test_short_budget_is_respected_on_small_sizes():
+    inst = make_instance("singletons20", 20, [[e] for e in range(20)])
+    begin = time.perf_counter()
+    result = run_bf(inst, time_limit=0.002)
+    assert time.perf_counter() - begin < 0.05
+    assert result.timed_out
+
+
+def test_time_limit_respected_on_the_largest_instance():
+    inst = read_instance(BENCHMARKS / "sts" / "data.2187")
+    _ = inst.masks
+    begin = time.perf_counter()
+    result = run_bf(inst, time_limit=1.0)
+    elapsed = time.perf_counter() - begin
+    assert result.timed_out
+    assert elapsed < 1.1
+
+
 def test_registry():
     assert METHODS["brute_force"] is solve

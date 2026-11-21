@@ -16,7 +16,8 @@ entries). The method is only usable for small n: instances with
 
 The clock is checked once per state, not once per transition: a transition is
 only an OR and a comparison, and reading the clock costs about as much.
-After the deadline, at most m more transitions are done.
+After the deadline, at most m more transitions are done. If the full state has
+already been reached, the cover found so far is returned as "feasible".
 """
 
 import time
@@ -25,6 +26,21 @@ import numpy as np
 
 from setcover.instance import Instance
 from setcover.result import Result
+
+
+def _rebuild(parent: list[int], chosen: list[int], full_mask: int) -> list[int]:
+    """Follow the parents from the full state back to the empty one.
+
+    Valid at any time of the search: parent[x] < x, and each step adds
+    exactly the subset chosen[x], so the union of the subsets is full_mask.
+    """
+    selected = []
+    mask = full_mask
+    while mask != 0:
+        selected.append(chosen[mask])
+        mask = parent[mask]
+    selected.reverse()
+    return selected
 
 
 def solve(
@@ -58,7 +74,12 @@ def solve(
 
     for mask in range(total_states):
         if time.perf_counter() >= deadline:
-            return Result(selected=[], size=0, status="none", timed_out=True)
+            # Keep the cover already found for the full state, if any.
+            if dp[full_mask] == float("inf"):
+                return Result(selected=[], size=0, status="none", timed_out=True)
+            selected = _rebuild(parent, chosen, full_mask)
+            return Result(selected=selected, size=len(selected), status="feasible",
+                          timed_out=True)
 
         if dp[mask] == float("inf"):
             # This set of elements cannot be reached exactly.
@@ -76,13 +97,6 @@ def solve(
     if dp[full_mask] == float("inf"):
         return Result(selected=[], size=0, status="none", extra={"reason": "infeasible"})
 
-    # Rebuild the cover from the full state back to the empty one.
-    selected = []
-    mask = full_mask
-    while mask != 0:
-        selected.append(chosen[mask])
-        mask = parent[mask]
-    selected.reverse()
-
+    selected = _rebuild(parent, chosen, full_mask)
     return Result(selected=selected, size=len(selected), status="optimal",
                   lower_bound=len(selected))

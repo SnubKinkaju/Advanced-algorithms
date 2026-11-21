@@ -108,3 +108,20 @@ def test_large_instance_refused_at_once():
     assert result.status == "none"
     assert result.timed_out is False
     assert result.extra["reason"] == "too_large"
+
+def test_interrupted_search_keeps_the_cover_found():
+    # The full state is reached from the empty one, then 2^20 states remain.
+    inst = make_instance("one_big_set", 20, [list(range(20))] + [[e] for e in range(20)])
+    result = solve(inst, 0.05, np.random.default_rng(0))
+    verify(inst, result)
+    assert result.status == "feasible"
+    assert result.selected == [0]
+    assert result.timed_out is True
+
+
+def test_interrupted_results_are_valid_covers():
+    for seed in range(10):
+        inst = generate(18, 30, 0.15, seed)
+        result = solve(inst, 0.01, np.random.default_rng(0))
+        verify(inst, result)
+        assert result.status in ("none", "feasible", "optimal")

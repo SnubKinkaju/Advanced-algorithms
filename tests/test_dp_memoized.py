@@ -96,7 +96,8 @@ def test_memory_limit():
     # The search needs more than 4 states, so it stops on the memo size.
     inst = generate(12, 20, 0.2, seed=0)
     result = solve(inst, 30.0, np.random.default_rng(0), max_states=4)
-    assert result.status == "none"
+    verify(inst, result)
+    assert result.status == "feasible"
     assert result.timed_out is False
     assert result.extra["reason"] == "memory_limit"
 
@@ -115,6 +116,34 @@ def test_time_limit_respected():
     begin = time.perf_counter()
     result = solve(inst, 1.0, np.random.default_rng(0))
     elapsed = time.perf_counter() - begin
-    assert result.status == "none"
+    verify(inst, result)
+    assert result.status == "feasible"
     assert result.timed_out is True
     assert elapsed < 1.2
+
+ONE_BIG_SET = make_instance("one_big_set", 20, [list(range(20))] + [[e] for e in range(20)])
+
+
+def test_interrupted_search_keeps_the_cover_found():
+    # The cover [0] is found at once; the full search takes seconds.
+    result = solve(ONE_BIG_SET, 0.05, np.random.default_rng(0))
+    verify(ONE_BIG_SET, result)
+    assert result.status == "feasible"
+    assert result.selected == [0]
+    assert result.timed_out is True
+
+
+def test_memory_limit_keeps_the_cover_found():
+    result = solve(ONE_BIG_SET, 30.0, np.random.default_rng(0), max_states=100)
+    verify(ONE_BIG_SET, result)
+    assert result.status == "feasible"
+    assert result.selected == [0]
+    assert result.extra["reason"] == "memory_limit"
+
+
+def test_interrupted_results_are_valid_covers():
+    for seed in range(10):
+        inst = generate(18, 30, 0.15, seed)
+        result = solve(inst, 0.01, np.random.default_rng(0))
+        verify(inst, result)
+        assert result.status in ("none", "feasible", "optimal")
