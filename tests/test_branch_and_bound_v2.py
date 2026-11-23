@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from setcover.bounds import counting_bound
 from setcover.generator import generate
 from setcover.instance import make_instance
 from setcover.io import read_instance
@@ -173,6 +174,37 @@ def test_time_limit_respected_without_lp_on_large_instance(relative_path):
     verify(inst, res)
     assert res.timed_out
     assert elapsed < 2.0
+
+
+@pytest.mark.parametrize("relative_path, bound", [("sts/data.1215", 405), ("sts/data.2187", 729)])
+def test_time_limit_respected_with_lp_on_regular_instance(relative_path, bound):
+    # Regular instance: the LP value is n/p, so HiGHS is not called.
+    inst = read_instance(BENCHMARKS / relative_path)
+    inst.masks  # built before the clock, as in the runner
+    begin = time.perf_counter()
+    res = run(inst, time_limit=1.0)
+    elapsed = time.perf_counter() - begin
+    verify(inst, res)
+    assert res.timed_out
+    assert res.lower_bound == res.extra["lp_bound"] == bound
+    assert elapsed < 2.0
+
+
+@pytest.mark.parametrize("relative_path", ["sts/data.1215", "cyc/scpcyc11.txt"])
+def test_search_starts_with_lp_on_regular_instance(relative_path):
+    # Before the shortcut, HiGHS took the budget and no node was explored.
+    inst = read_instance(BENCHMARKS / relative_path)
+    res = run(inst, time_limit=1.0)
+    verify(inst, res)
+    assert res.nodes > 0
+
+
+def test_counting_bound_is_the_default_root_bound():
+    inst = read_instance(BENCHMARKS / "sts" / "data.1215")
+    res = run(inst, time_limit=1.0, use_lp=False)
+    verify(inst, res)
+    assert res.lower_bound == counting_bound(inst) == 405
+    assert res.extra == {"lp_bound": None, "lp_time": 0.0}
 
 
 def test_registry():

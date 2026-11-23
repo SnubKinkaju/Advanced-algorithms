@@ -12,8 +12,12 @@ A node is cut when it cannot lead to a smaller cover than the best one found:
   ceil(u / g) more subsets (counting bound);
 - an element that no allowed subset covers makes the branch infeasible.
 
-The LP bound is used once, at the root. If the whole tree is explored, the best
-cover is optimal. If the time limit is reached, the best cover found is returned.
+The root lower bound is the counting bound, raised to the LP bound when it is
+computed in time (see bounds.lp_bound: on a regular instance, such as STS or
+CYC, the LP value is known exactly and HiGHS is not called). The LP gets the
+whole remaining budget. If the best cover reaches the root lower bound, or if
+the whole tree is explored, the best cover is optimal. If the time limit is
+reached, the best cover found is returned.
 """
 
 import math
@@ -21,7 +25,7 @@ import time
 
 import numpy as np
 
-from setcover.bounds import lp_bound
+from setcover.bounds import counting_bound, lp_bound
 from setcover.instance import Instance
 from setcover.methods import greedy
 from setcover.result import Result
@@ -66,20 +70,26 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
         return Result(selected=[], size=0, status="none", timed_out=True, nodes=0)
     best = start.selected
 
-    # Root lower bound: the LP bound if it is computed in time, otherwise 1.
-    root_lb = 1
+    # Root lower bound: the counting bound, raised to the LP bound if it is computed in time.
+    root_lb = counting_bound(inst)
+    lp = None
+    lp_time = 0.0
     if use_lp:
-        lp = lp_bound(inst, time_limit=deadline - time.perf_counter())
-        if lp is not None:
-            root_lb = lp
+        begin = time.perf_counter()
+        if deadline - begin > 0:
+            lp = lp_bound(inst, time_limit=deadline - begin)
+            if lp is not None:
+                root_lb = max(root_lb, lp)
+        lp_time = time.perf_counter() - begin
+    extra = {"lp_bound": lp, "lp_time": lp_time}
     if len(best) <= root_lb:
         return Result(selected=sorted(best), size=len(best), status="optimal",
-                      lower_bound=len(best), nodes=0)
+                      lower_bound=len(best), nodes=0, extra=extra)
 
     # No time left to explore: return the greedy cover without building the masks.
     if time.perf_counter() >= deadline:
         return Result(selected=sorted(best), size=len(best), status="feasible",
-                      timed_out=True, lower_bound=root_lb, nodes=0)
+                      timed_out=True, lower_bound=root_lb, nodes=0, extra=extra)
 
     masks = inst.masks
     full = (1 << inst.n) - 1
@@ -143,8 +153,6 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
 
     if timed_out:
         return Result(selected=sorted(best), size=len(best), status="feasible",
-                      timed_out=True, lower_bound=root_lb, nodes=nodes)
+                      timed_out=True, lower_bound=root_lb, nodes=nodes, extra=extra)
     return Result(selected=sorted(best), size=len(best), status="optimal",
-                  lower_bound=len(best), nodes=nodes)
-
-
+                  lower_bound=len(best), nodes=nodes, extra=extra)

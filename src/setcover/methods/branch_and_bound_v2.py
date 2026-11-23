@@ -39,8 +39,10 @@ every cover is found in exactly one branch. Version 2 differs in three ways.
    The LP relaxation gets at most lp_fraction of the time limit, so that most
    of the budget is left for the search (in version 1 it could take all the
    time on large instances, and the method then returned the greedy cover).
-   If it is not solved in time, the root lower bound is 1. The search stops as
-   soon as the best cover reaches the LP bound, since it is then optimal.
+   On a regular instance (STS, CYC) the LP value is known exactly and HiGHS is
+   not called (see bounds.lp_bound). The root lower bound is the counting bound,
+   raised to the LP bound when it is computed in time. The search stops as soon
+   as the best cover reaches this bound, since it is then optimal.
 
 Complexity. A node costs O(N + m log m) in the worst case, where
 N = sum of |S_j|: scanning the uncovered elements and their allowed subsets to
@@ -50,9 +52,9 @@ O(sum of |covering[e]| for e in S_j), to update the gains. The number of nodes i
 exact method on an NP-hard problem. Memory is O(n + m) for the state, plus the
 candidate lists of the nodes on the current path.
 
-If the whole tree is explored, or if the best cover reaches the LP bound, the
-best cover is optimal. If the time limit is reached, the best cover found so
-far is returned with status "feasible".
+If the whole tree is explored, or if the best cover reaches the root lower
+bound, the best cover is optimal. If the time limit is reached, the best cover
+found so far is returned with status "feasible".
 """
 
 import heapq
@@ -60,7 +62,7 @@ import time
 
 import numpy as np
 
-from setcover.bounds import lp_bound
+from setcover.bounds import counting_bound, lp_bound
 from setcover.instance import Instance
 from setcover.methods import greedy
 from setcover.result import Result
@@ -268,16 +270,20 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
         return Result(selected=[], size=0, status="none", timed_out=True, nodes=0)
     best = list(start.selected)
 
-    # Root lower bound: the LP bound, with at most lp_fraction of the time limit.
-    root_lb = 1
+    # Root lower bound: the counting bound, raised to the LP bound if it is
+    # computed within lp_fraction of the time limit.
+    root_lb = counting_bound(inst)
     lp = None
+    lp_time = 0.0
     if use_lp:
-        lp_time = min(lp_fraction * time_limit, deadline - time.perf_counter())
-        if lp_time > 0:
-            lp = lp_bound(inst, time_limit=lp_time)
+        begin = time.perf_counter()
+        budget = min(lp_fraction * time_limit, deadline - begin)
+        if budget > 0:
+            lp = lp_bound(inst, time_limit=budget)
             if lp is not None:
-                root_lb = lp
-    extra = {"lp_bound": lp}
+                root_lb = max(root_lb, lp)
+        lp_time = time.perf_counter() - begin
+    extra = {"lp_bound": lp, "lp_time": lp_time}
     if len(best) <= root_lb:
         return Result(selected=sorted(best), size=len(best), status="optimal",
                       lower_bound=len(best), nodes=0, extra=extra)
@@ -295,4 +301,3 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
                       timed_out=True, lower_bound=root_lb, nodes=search.nodes, extra=extra)
     return Result(selected=sorted(best), size=len(best), status="optimal",
                   lower_bound=len(best), nodes=search.nodes, extra=extra)
-
