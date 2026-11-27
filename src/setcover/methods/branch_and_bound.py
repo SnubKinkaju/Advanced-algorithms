@@ -99,6 +99,7 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
     stack = [(full, None, 0, 0)]
     nodes = 0
     timed_out = False
+    proved = False
 
     while stack:
         if time.perf_counter() >= deadline:
@@ -112,6 +113,10 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
         if uncovered == 0:
             if depth < len(best):
                 best = _unwind(chosen)
+                # The cover reaches the root lower bound: it is optimal, stop here.
+                if len(best) <= root_lb:
+                    proved = True
+                    break
             continue
 
         # At least one more subset is needed: stop if that cannot beat the best cover.
@@ -151,7 +156,7 @@ def solve(inst: Instance, time_limit: float, rng: np.random.Generator,
             f |= 1 << j
         stack.extend(reversed(children))
 
-    if timed_out:
+    if timed_out and not proved:
         return Result(selected=sorted(best), size=len(best), status="feasible",
                       timed_out=True, lower_bound=root_lb, nodes=nodes, extra=extra)
     return Result(selected=sorted(best), size=len(best), status="optimal",

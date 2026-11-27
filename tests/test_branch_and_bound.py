@@ -160,5 +160,26 @@ def test_counting_bound_is_the_default_root_bound():
     assert res.extra == {"lp_bound": None, "lp_time": 0.0}
 
 
+def test_stops_when_the_search_reaches_the_root_bound():
+    # Greedy gives 12 here, the LP bound is 10 and the search finds a cover of
+    # size 10 after a few nodes. That cover is optimal, so the search must stop
+    # and say so, instead of exploring the rest of the tree (about 22,000 nodes
+    # before the fix) and returning "feasible" if the time limit is reached.
+    inst = generate(50, 150, 0.08, seed=6)
+    res = run(inst, time_limit=5.0)
+    verify(inst, res)
+    assert res.status == "optimal"
+    assert res.size == res.lower_bound == 10
+    assert res.nodes < 1000
+
+
+def test_a_cover_equal_to_its_lower_bound_is_declared_optimal():
+    inst = generate(50, 150, 0.08, seed=6)
+    for limit in (0.05, 0.5, 5.0):
+        res = run(inst, time_limit=limit)
+        if res.size == res.lower_bound:
+            assert res.status == "optimal"
+
+
 def test_registry():
     assert METHODS["branch_and_bound"] is branch_and_bound.solve
